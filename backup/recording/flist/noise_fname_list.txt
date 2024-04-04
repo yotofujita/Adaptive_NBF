@@ -1,0 +1,16 @@
+BGD_150212_040_STR, /home/xks/dataset/CHiME3/backgrounds/BGD_150212_040_STR.CH1.wav
+BGD_150211_030_STR, /home/xks/dataset/CHiME3/backgrounds/BGD_150211_030_STR.CH1.wav
+BGD_150205_030_PED, /home/xks/dataset/CHiME3/backgrounds/BGD_150205_030_PED.CH1.wav
+BGD_150204_020_BUS, /home/xks/dataset/CHiME3/backgrounds/BGD_150204_020_BUS.CH1.wav
+BGD_150211_020_STR, /home/xks/dataset/CHiME3/backgrounds/BGD_150211_020_STR.CH1.wav
+BGD_150204_030_BUS, /home/xks/dataset/CHiME3/backgrounds/BGD_150204_030_BUS.CH1.wav
+BGD_150204_040_BUS, /home/xks/dataset/CHiME3/backgrounds/BGD_150204_040_BUS.CH1.wav
+BGD_150205_040_CAF, /home/xks/dataset/CHiME3/backgrounds/BGD_150205_040_CAF.CH1.wav
+BGD_150203_020_PED, /home/xks/dataset/CHiME3/backgrounds/BGD_150203_020_PED.CH1.wav
+BGD_150211_040_PED, /home/xks/dataset/CHiME3/backgrounds/BGD_150211_040_PED.CH1.wav
+BGD_150204_020_CAF, /home/xks/dataset/CHiME3/backgrounds/BGD_150204_020_CAF.CH1.wav
+BGD_150203_010_PED, /home/xks/dataset/CHiME3/backgrounds/BGD_150203_010_PED.CH1.wav
+BGD_150204_030_CAF, /home/xks/dataset/CHiME3/backgrounds/BGD_150204_030_CAF.CH1.wav
+BGD_150204_010_BUS, /home/xks/dataset/CHiME3/backgrounds/BGD_150204_010_BUS.CH1.wav
+BGD_150203_010_STR, /home/xks/dataset/CHiME3/backgrounds/BGD_150203_010_STR.CH1.wav
+BGD_150203_010_CAF, /home/xks/dataset/CHiME3/backgrounds/BGD_150203_010_CAF.CH1.wav

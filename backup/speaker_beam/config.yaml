@@ -1,0 +1,98 @@
+seed: 4234
+__set_seed: !!python/object/apply:torch.manual_seed [!ref <seed>]
+
+# Path where data manifest files will be stored
+# The data manifest files are created by the data preparation script.
+train_json: ../flist/train_librispeech.json
+valid_json: ../flist/valid_librispeech.json
+
+
+# model: !new:model_sepformer.Sepformer
+    # encoder_out_nchannels: !ref <n_fft> + 2
+    # masknet_numspks: 1
+# model_name: Sepformer
+
+# model_name: SB_ver1
+
+model_name: SB_ver2
+
+z_dim: None
+loss_spk_emb: None
+
+segment_size: 128
+hidden_channel: 128
+RNN_or_TF: TF
+
+batch_size: 32
+
+overlap_ratio: 0.5
+
+
+# FFT parameters
+sample_rate: 16000
+win_length: 64 # ms
+hop_length: 16 # ms
+n_fft: 1024 # # of points
+window_fn: !name:torch.hann_window
+
+# Training Parameters
+n_epoch: 100
+learning_rate: 0.0001
+dataloader_options:
+    batch_size: !ref <batch_size>
+    num_workers: 1
+
+
+    # The mask operates on log-spectral features, computed using these
+# STFT parameters, as well as computing magnitude and log1p.
+compute_STFT: !new:speechbrain.processing.features.STFT
+    sample_rate: !ref <sample_rate>
+    win_length: !ref <win_length>
+    hop_length: !ref <hop_length>
+    n_fft: !ref <n_fft>
+    window_fn: !ref <window_fn>
+compute_ISTFT: !new:speechbrain.processing.features.ISTFT
+    sample_rate: !ref <sample_rate>
+    win_length: !ref <win_length>
+    hop_length: !ref <hop_length>
+    window_fn: !ref <window_fn>
+
+# Resynthesize combines noisy phase with enhanced magnitudes.
+resynth: !name:speechbrain.processing.signal_processing.resynthesize
+    stft: !ref <compute_STFT>
+    istft: !ref <compute_ISTFT>
+    normalize_wavs: False
+
+# The first object passed to the Brain class is this "Epoch Counter"
+# which is saved by the Checkpointer so that training can be resumed
+# if it gets interrupted at any point.
+epoch_counter: !new:speechbrain.utils.epoch_loop.EpochCounter
+    limit: !ref <n_epoch>
+
+
+# This optimizer will be constructed by the Brain class after all parameters
+# are moved to the correct device. Then it will be added to the checkpointer.
+opt_class: !name:torch.optim.Adam
+    lr: !ref <learning_rate>
+
+# output_folder: !ref /n/work3/sekiguch/data_for_paper/ICASSP2022/train_log/<model_name>/T<segment_size>-Z<z_dim>-H<hidden_channel>-loss_<loss_spk_info>/
+# save_folder: !ref <output_folder>/save
+# train_log: !ref <output_folder>/train_log.txt
+# # # The train logger writes training statistics to a file, as well as stdout.
+# train_logger_text: !new:speechbrain.utils.train_logger.FileTrainLogger
+#     save_file: !ref <train_log>
+# train_logger: !new:speechbrain.utils.train_logger.TensorboardLogger
+#     save_dir: !ref <save_folder>/tensorboard
+
+# Added noise and reverb come from OpenRIR dataset, automatically
+# downloaded and prepared with this Environmental Corruption class.
+# The babble is generated from other utterances in each batch.
+# env_corruption: !new:speechbrain.lobes.augment.EnvCorrupt
+#     openrir_folder: !ref <data_folder>
+#     openrir_max_noise_len: 10
+#     noise_snr_low: 0
+#     noise_snr_high: 15
+#     babble_speaker_count: !ref <batch_size> - 1
+#     babble_snr_low: 0
+#     babble_snr_high: 15
+
