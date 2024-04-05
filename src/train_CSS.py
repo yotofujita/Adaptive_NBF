@@ -5,8 +5,9 @@ import numpy as np
 import torch
 import json
 import h5py
-import os
+
 import pytorch_lightning as pl
+from pytorch_lightning.accelerators import find_usable_cuda_devices
 
 import utility
 from Lightning_CSS import Lightning_CSS
@@ -41,36 +42,30 @@ class MultichannelDataset(torch.utils.data.Dataset):
         self.use_DAN = use_DAN
         self.use_VAD = use_VAD
 
-        f = h5py.File("../data/SV_for_HL2.h5", "r")
+        f = h5py.File("./data/SV_for_HL2.h5", "r") # SV_EAFM: [E, A, F, M], azim: [A,], elev: [E,]
         self.SV_EAFM = torch.from_numpy(np.asarray(f["SV_EAFM"], dtype=np.complex64))
         norm_EAF = torch.linalg.norm(self.SV_EAFM, axis=3)
         self.SV_EAFM /= norm_EAF[..., None]
 
         if self.dataset == "wsj0_chime3":
-            self.root = "/n/work3/sekiguch/dataset/Hololens2_SimData_WSJ0_CHiME3/"
-            fname = f"../data/{self.step}_wsj0_chime3_{self.n_spk}spk.json"
+            self.root = "./data/Hololens2_SimData_WSJ0_CHiME3"
+            fname = f"{self.root}/{self.step}_wsj0_chime3_{self.n_spk}spk.json"
 
         elif self.dataset == "librispeech":
             raise ValueError
-            # self.root = "/n/work3/sekiguch/dataset/Hololens2_SimData_Librispeech/"
-            # fname = f"../data/{self.step}_librispeech_{self.n_spk}spk.json"
+            # self.root = "./data/Hololens2_SimData_Librispeech"
+            # fname = f"{self.root}/{self.step}_librispeech_{self.n_spk}spk.json"
 
         self.flist = json.load(open(fname, "r"))
         self.id_list = np.random.permutation(list(self.flist.keys()))
-
-        world_size = int(os.environ["WORLD_SIZE"])
-        local_rank = int(os.environ["LOCAL_RANK"])
-        if 24 % world_size != 0:
-            raise ValueError("WORLD_SIZE should be a divisor of 24 (number of data block)")
-        n_block = 24 // world_size
 
         self.image_list = []
         self.mixture_list = []
         self.spk_id_list = []
         self.angle_list = []
 
-        for i in range(n_block):
-            block_idx = local_rank * n_block + i + 1
+        for i in range(24):
+            block_idx = i + 1
             h5_fname = (
                 self.root
                 + f"/h5/{self.n_spk}spk/{self.step}/"
@@ -78,27 +73,13 @@ class MultichannelDataset(torch.utils.data.Dataset):
             )
             print("Start loading ", h5_fname)
             with h5py.File(h5_fname, "r") as f:
-                self.image_list.append(torch.as_tensor(np.array(f["image"])))
                 self.mixture_list.append(torch.as_tensor(np.array(f["mixture"])))
+                self.image_list.append(torch.as_tensor(np.array(f["image"])))
                 self.angle_list.append(torch.as_tensor(np.array(f["angle"])))
 
-        self.mixture_list = torch.cat(self.mixture_list, dim=0)
-        self.image_list = torch.cat(self.image_list, dim=0)
-        self.angle_list = torch.cat(self.angle_list, dim=0)
-
-    def set_param(self, use_BF=None, use_SV=None, use_DAN=None, use_VAD=None, angle_std=None, dan_std=None):
-        if use_BF is not None:
-            self.use_BF = use_BF
-        if use_SV is not None:
-            self.use_SV = use_SV
-        if use_DAN is not None:
-            self.use_DAN = use_DAN
-        if use_VAD is not None:
-            self.use_VAD = use_VAD
-        if angle_std is not None:
-            self.angle_std = angle_std
-        if dan_std is not None:
-            self.dan_std = dan_std
+        self.mixture_list = torch.cat(self.mixture_list, dim=0)  # [B, M, T, F]
+        self.image_list = torch.cat(self.image_list, dim=0)  # [B, H*W]
+        self.angle_list = torch.cat(self.angle_list, dim=0)  # [B, 2], E:[-1, 0, 1], A:[0 ~ 71]
 
     def __len__(self):
         return len(self.mixture_list)
@@ -133,7 +114,7 @@ class LightningDataModule(pl.LightningDataModule):
         self.num_workers = num_workers
         self.angle_std = angle_std
 
-    def set_param(self, use_BF=None, use_SV=None, use_DAN=None, use_VAD=None, angle_std=None, dan_std=None):
+    def set_param(self, use_BF=None, use_SV=None, use_DAN=None, use_VAD=None, angle_std=0, dan_std=0):
         if use_BF is not None:
             self.use_BF = use_BF
         if use_SV is not None:
@@ -147,67 +128,30 @@ class LightningDataModule(pl.LightningDataModule):
         if dan_std is not None:
             self.dan_std = dan_std
 
-        try:
-            self.train_dataset.set_param(
-                use_BF=self.use_BF,
-                use_SV=self.use_SV,
-                use_DAN=self.use_DAN,
-                use_VAD=self.use_VAD,
-                angle_std=self.angle_std,
-                dan_std=self.dan_std,
-            )
-            self.valid_dataset.set_param(
-                use_BF=self.use_BF,
-                use_SV=self.use_SV,
-                use_DAN=self.use_DAN,
-                use_VAD=self.use_VAD,
-                angle_std=self.angle_std,
-                dan_std=self.dan_std,
-            )
-        except:
-            pass
-
     def prepare_data(self):
         pass
 
     def setup(self, stage=None):
-        if hasattr(self, "train_dataset"):
-            self.train_dataset.set_param(
-                use_BF=self.use_BF,
-                use_SV=self.use_SV,
-                use_DAN=self.use_DAN,
-                use_VAD=self.use_VAD,
-                angle_std=self.angle_std,
-                dan_std=self.dan_std,
-            )
-            self.valid_dataset.set_param(
-                use_BF=self.use_BF,
-                use_SV=self.use_SV,
-                use_DAN=self.use_DAN,
-                use_VAD=self.use_VAD,
-                angle_std=self.angle_std,
-                dan_std=self.dan_std,
-            )
-        else:
-            self.train_dataset = MultichannelDataset(
-                use_BF=self.use_BF,
-                use_SV=self.use_SV,
-                use_DAN=self.use_DAN,
-                use_VAD=self.use_VAD,
-                window_len=48128,
-                step="train",
-                angle_std=self.angle_std,
-            )
-            self.valid_dataset = MultichannelDataset(
-                use_BF=self.use_BF,
-                use_SV=self.use_SV,
-                use_DAN=self.use_DAN,
-                use_VAD=self.use_VAD,
-                window_len=48128,
-                step="valid",
-                angle_std=self.angle_std,
-            )
-            # self.train_dataset = self.valid_dataset
+        self.train_dataset = MultichannelDataset(
+            use_BF=self.use_BF,
+            use_SV=self.use_SV,
+            use_DAN=self.use_DAN,
+            use_VAD=self.use_VAD,
+            window_len=48128,
+            step="train",
+            angle_std=self.angle_std,
+            dan_std=self.dan_std,
+        )
+        self.valid_dataset = MultichannelDataset(
+            use_BF=self.use_BF,
+            use_SV=self.use_SV,
+            use_DAN=self.use_DAN,
+            use_VAD=self.use_VAD,
+            window_len=48128,
+            step="valid",
+            angle_std=self.angle_std,
+            dan_std=self.dan_std,
+        )
 
     def train_dataloader(self):
         return torch.utils.data.DataLoader(
@@ -233,6 +177,8 @@ class LightningDataModule(pl.LightningDataModule):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--n_devices", type=int, default=1)
+    parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--setting", type=int)
     parser.add_argument("--version", default=0, help="test")
     parser.add_argument("--resume_from_last", action="store_true")
@@ -242,11 +188,11 @@ if __name__ == "__main__":
     parser.add_argument("--memo", type=str, default="")
     args_tmp, _ = parser.parse_known_args()
     parser = Lightning_CSS.add_model_specific_args(parser, model_name=args_tmp.model_name)
-    parser = pl.Trainer.add_argparse_args(parser)
+    # parser = pl.Trainer.add_argparse_args(parser)
     args, _ = parser.parse_known_args()
 
     torch.cuda.empty_cache()
-    save_root_dir = "/n/work3/sekiguch/data_for_paper/IROS2022/"
+    save_root_dir = "./data/IROS2022/"
 
     # if args.resume_from_ckpt is not None:
     #     ckpt_path = args.resume_from_ckpt
@@ -331,10 +277,10 @@ if __name__ == "__main__":
     #     exit()
 
     checkpoint_callback = pl.callbacks.ModelCheckpoint(monitor="valid_sep_loss", save_last=True, every_n_epochs=30)
-    trainer = pl.Trainer.from_argparse_args(
-        args,
-        gpus=args.gpus,
-        strategy=pl.plugins.DDPPlugin(find_unused_parameters=False),
+    trainer = pl.Trainer(
+        accelerator=args.device, 
+        devices=find_usable_cuda_devices(args.n_devices), 
+        # strategy=pl.plugins.DDPPlugin(find_unused_parameters=False),
         callbacks=[checkpoint_callback],
         default_root_dir=default_root_dir,
         gradient_clip_val=1.0,

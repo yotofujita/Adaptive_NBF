@@ -37,11 +37,11 @@ def make_feature(mixture, SV_FM, azim_idx, use_BF, use_SV, use_DAN, BF="DSBF"):
             input_dim = 2 * n_mic - 1
 
         feature = torch.zeros([n_time, n_freq, input_dim], device=mixture_MTF.device)
-        feature[..., 0] = torch.log(torch.abs(mixture_MTF).mean(axis=0) + 1e-8)
+        feature[..., 0] = torch.log(torch.abs(mixture_MTF).mean(axis=0) + 1e-8)  # non-phasal feature 
 
         IPD = mixture_MTF[1:] / (mixture_MTF[0, None] + 1e-8)  # M-1 x T x F
         IPD /= torch.abs(IPD) + 1e-8
-        feature[..., 1 : 2 * n_mic - 1] = torch.view_as_real(IPD.permute(1, 2, 0)).reshape(n_time, n_freq, -1)
+        feature[..., 1 : 2 * n_mic - 1] = torch.view_as_real(IPD.permute(1, 2, 0)).reshape(n_time, n_freq, -1)  # phasal feature 
 
         start_idx = 2 * n_mic - 1
         if use_BF:
