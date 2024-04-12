@@ -8,7 +8,7 @@ import torchaudio
 import numpy as np
 import pytorch_lightning as pl
 
-from utility import calc_SI_SDR, MVDR, MUSIC
+from utils.utility import calc_SI_SDR, MVDR, MUSIC
 
 
 class Lightning_LOC(pl.LightningModule):

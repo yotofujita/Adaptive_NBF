@@ -1,0 +1,24 @@
+epochs: 500
+n_gpus: 1
+
+data_module:
+  _target_: data.data_modules.LightningDataModule
+
+  batch_size: 16
+  num_workers: 2
+
+lightning_module:
+  _target_: modules.lightning_modules.Lightning_CSS
+
+  lr: 0.001
+  threshold: -10
+
+  save_hparam: True
+
+  separator_args:
+    _target_: modules.LSTM_CSS.LSTM_CSS
+    n_mic: 5
+    n_freq: 513 
+    input_lstm: 1024
+    hidden_lstm: 512
+    n_layer: 3

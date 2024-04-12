@@ -8,8 +8,8 @@ import h5py
 import os
 import pytorch_lightning as pl
 
-import utility
-from Lightning_CSS import Lightning_CSS
+import utils.utility as utility
+from lightning_modules.Lightning_CSS import Lightning_CSS
 
 
 class MultichannelDataset(torch.utils.data.Dataset):

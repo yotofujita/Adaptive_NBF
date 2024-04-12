@@ -8,7 +8,7 @@ import h5py
 import os
 import pytorch_lightning as pl
 
-import utility
+import utils.utility as utility
 from Lightning_LOC import Lightning_LOC
 
 

@@ -11,7 +11,7 @@ from speechbrain.lobes.models.dual_path import SBRNNBlock, Dual_Computation_Bloc
 import copy
 
 from pytorch_lightning import LightningModule
-from utility import segmentation, overlap_add, calculate_SCM
+from utils.utility import segmentation, overlap_add, calculate_SCM
 from model_utility import nn_segmentation, nn_over_add, nn_padding
 
 class SpeakerNet(nn.Module):

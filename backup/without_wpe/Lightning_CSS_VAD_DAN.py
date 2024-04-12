@@ -7,7 +7,7 @@ import torchaudio
 import numpy as np
 import pytorch_lightning as pl
 
-from utility import calc_SI_SDR, MVDR
+from utils.utility import calc_SI_SDR, MVDR
 
 
 class Lightning_CSS_VAD_DAN(pl.LightningModule):

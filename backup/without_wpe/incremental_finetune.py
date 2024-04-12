@@ -3,7 +3,7 @@
 
 import numpy as np
 import torch
-from Lightning_CSS import Lightning_CSS
+from lightning_modules.Lightning_CSS import Lightning_CSS
 import pytorch_lightning as pl
 import json
 import h5py
@@ -11,7 +11,7 @@ import os
 from glob import glob
 from tqdm import tqdm
 import torchaudio
-import utility
+import utils.utility as utility
 
 
 class FinetuneDataset(torch.utils.data.Dataset):

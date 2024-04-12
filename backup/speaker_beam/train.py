@@ -9,7 +9,7 @@ import pdb
 import librosa
 from numpy.lib.stride_tricks import as_strided
 
-from utility import *
+from utils.utility import *
 import resampy
 
 class SEBrain(sb.Brain):

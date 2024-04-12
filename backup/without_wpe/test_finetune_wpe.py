@@ -11,8 +11,8 @@ import h5py
 import os
 from glob import glob
 
-from Lightning_CSS import Lightning_CSS
-import utility
+from lightning_modules.Lightning_CSS import Lightning_CSS
+import utils.utility as utility
 
 from minibatch_wpe import Minibatch_WPE
 import cupy as cp

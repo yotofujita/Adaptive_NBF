@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader, random_split
 
 import torch.nn.functional as F
 import speechbrain as sb
-from utility import segmentation, overlap_add, calculate_SCM
+from utils.utility import segmentation, overlap_add, calculate_SCM
 from model_utility import nn_segmentation, nn_over_add, nn_padding
 from pytorch_lightning.loggers import MLFlowLogger
 

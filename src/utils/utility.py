@@ -6,7 +6,7 @@ import torch
 import torchaudio
 
 
-def make_feature(mixture, SV_FM, azim_idx, use_BF, use_SV, use_DAN, BF="DSBF"):
+def make_feature(mixture, SV_FM, azim_idx):
     """
     Parameters
     ----------
@@ -27,78 +27,42 @@ def make_feature(mixture, SV_FM, azim_idx, use_BF, use_SV, use_DAN, BF="DSBF"):
     def _make_feature(mixture_MTF, SV_FM, azim_idx):
         n_mic, n_time, n_freq = mixture_MTF.shape
 
-        if use_BF and use_SV:
-            input_dim = 4 * n_mic - 2
-        elif use_BF:
-            input_dim = 2 * n_mic
-        elif use_SV:
-            input_dim = 4 * n_mic - 3
-        else:
-            input_dim = 2 * n_mic - 1
-
+        input_dim = 2 * n_mic
         feature = torch.zeros([n_time, n_freq, input_dim], device=mixture_MTF.device)
-        feature[..., 0] = torch.log(torch.abs(mixture_MTF).mean(axis=0) + 1e-8)  # non-phasal feature 
 
+        # Log-magnitude spectrogram of mixture 
+        feature[..., 0] = torch.log(torch.abs(mixture_MTF).mean(axis=0) + 1e-8)
+
+        # Inter-channel phase differences
         IPD = mixture_MTF[1:] / (mixture_MTF[0, None] + 1e-8)  # M-1 x T x F
         IPD /= torch.abs(IPD) + 1e-8
         feature[..., 1 : 2 * n_mic - 1] = torch.view_as_real(IPD.permute(1, 2, 0)).reshape(n_time, n_freq, -1)  # phasal feature 
 
-        start_idx = 2 * n_mic - 1
-        if use_BF:
-            if BF == "DSBF":
-                feature[..., start_idx] = torch.log(
-                    torch.abs(torch.einsum("fm, mtf -> tf", SV_FM.conj(), mixture_MTF)) + 1e-8
-                )
-            elif BF == "MPDR":
-                raise ValueError("MPDR is not ready")
-                # mixture_SCMinv_FMM = torch.linalg.inv(torch.einsum("itf, jtf -> fij", mixture_MTF, mixture_MTF.conj()))
-                # filter_FM = torch.einsum("fim, fm -> fi", mixture_SCMinv_FMM, SV_FM)
-                # filter_FM /= (SV_FM.conj() * filter_FM).sum(axis=1)[:, None]
-                # feature[..., start_idx] = torch.log(
-                #     torch.abs(torch.einsum("fm, mtf -> tf", filter_FM.conj(), mixture_MTF)) + 1e-8
-                # )
-
-            start_idx += 1
-
-        if use_SV:
-            IPD_SV = SV_FM[:, 1:] / (SV_FM[:, 0, None] + 1e-6)  # F x M-1
-            IPD_SV /= torch.abs(IPD_SV) + 1e-6
-            feature[..., start_idx:] = torch.view_as_real(IPD_SV).reshape(n_freq, -1)[None]
+        # Log-magnitude spectrogram of DSBF
+        feature[..., 2 * n_mic - 1] = torch.log(
+            torch.abs(torch.einsum("fm, mtf -> tf", SV_FM.conj(), mixture_MTF)) + 1e-8)
 
         feature = feature.reshape(n_time, -1)
 
-        if use_DAN:
-            azim_rad = azim_idx * 5 / 180 * np.pi
-            doa = torch.tensor([np.cos(azim_rad), np.sin(azim_rad)], dtype=torch.float32)
-            return feature, doa
-        else:
-            return feature
+        azim_rad = azim_idx * 5 / 180 * np.pi
+        doa = torch.tensor([np.cos(azim_rad), np.sin(azim_rad)], dtype=torch.float32)
+        return feature, doa
 
     if mixture.ndim == 3:
         return _make_feature(mixture, SV_FM, azim_idx)
 
     elif mixture.ndim == 4:
         n_batch = mixture.shape[0]
-        if use_DAN:
-            for b in range(n_batch):
-                feature_tmp, doa_tmp = _make_feature(mixture[b], SV_FM, azim_idx)
-                if b == 0:
-                    feature = torch.zeros(
-                        [n_batch, *feature_tmp.shape], dtype=feature_tmp.dtype, device=mixture.device
-                    )
-                    doa = torch.zeros([n_batch, *doa_tmp.shape], dtype=doa_tmp.dtype, device=mixture.device)
-                feature[b] = feature_tmp
-                doa[b] = doa_tmp
-            return feature, doa
-        else:
-            for b in range(n_batch):
-                feature_tmp = _make_feature(mixture[b], SV_FM, azim_idx)
-                if b == 0:
-                    feature = torch.zeros(
-                        [n_batch, *feature_tmp.shape], dtype=feature_tmp.dtype, device=mixture.device
-                    )
-                feature[b] = feature_tmp
-            return feature
+        for b in range(n_batch):
+            feature_tmp, doa_tmp = _make_feature(mixture[b], SV_FM, azim_idx)
+            if b == 0:
+                feature = torch.zeros(
+                    [n_batch, *feature_tmp.shape], dtype=feature_tmp.dtype, device=mixture.device
+                )
+                doa = torch.zeros([n_batch, *doa_tmp.shape], dtype=doa_tmp.dtype, device=mixture.device)
+            feature[b] = feature_tmp
+            doa[b] = doa_tmp
+        return feature, doa
 
 
 def split_sig(sig_MT, window_len=48128, shift=8000, stft=False):
@@ -138,19 +102,6 @@ def split_sig(sig_MT, window_len=48128, shift=8000, stft=False):
         return torchaudio.transforms.Spectrogram(n_fft=1024, hop_length=256, power=None)(sig_split_WMT).permute(
             0, 1, 3, 2
         )
-
-
-# def overlap_add(spec_BFT, overlap_ratio=0.25):
-#     sig_BT = torchaudio.transforms.InverseSpectrogram(n_fft=1024, hop_length=256).to(spec_BFT.device)(spec_BFT)
-#     n_window, n_time = sig_BT.shape
-
-#     sig_T = torch.zeros(int((n_window - 1) * (1 - overlap_ratio) * n_time + n_time)).to(spec_BFT.device)
-#     shift = int((1 - overlap_ratio) * n_time)
-#     for i in range(n_window):
-#         sig_T[i * shift : i * shift + n_time] += sig_BT[i]
-#         if i > 0:
-#             sig_T[i * shift : i * shift + (n_time - shift)] /= 2
-#     return sig_T
 
 
 def overlap_add(spec_BFT, shift=8000):

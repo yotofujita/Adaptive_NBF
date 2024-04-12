@@ -7,7 +7,7 @@ import resampy
 import sys, os
 import json
 from tqdm import tqdm
-from utility import eval_SDR
+from utils.utility import eval_SDR
 
 EPS = 1e-7
 

@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from bdb import effective
 import torch
 from torch import nn
 import torchaudio
-import numpy as np
 import pytorch_lightning as pl
 
-from utility import calc_SI_SDR, MVDR, GEV
+from utils.utility import calc_SI_SDR, MVDR, GEV
 
 
 class Lightning_CSS(pl.LightningModule):
@@ -25,7 +23,7 @@ class Lightning_CSS(pl.LightningModule):
         # parser.add_argument("--use_DAN", action="store_true")
         # parser.add_argument("--use_VAD", action="store_true")
         if model_name == "lstm":
-            from LSTM_CSS import LSTM_CSS
+            from modules.LSTM_CSS import LSTM_CSS
 
             parser = LSTM_CSS.add_model_specific_args(parser)
         elif model_name == "conformer":
@@ -72,7 +70,7 @@ class Lightning_CSS(pl.LightningModule):
             raise NotImplementedError
 
         elif self.model_name == "lstm":
-            from LSTM_CSS import LSTM_CSS
+            from modules.LSTM_CSS import LSTM_CSS
 
             self.separation_net = LSTM_CSS(
                 use_BF=self.use_BF,

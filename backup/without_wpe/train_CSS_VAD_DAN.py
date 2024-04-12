@@ -9,7 +9,7 @@ import json
 import h5py
 import os
 
-import utility
+import utils.utility as utility
 
 
 class MultichannelDataset(torch.utils.data.Dataset):
