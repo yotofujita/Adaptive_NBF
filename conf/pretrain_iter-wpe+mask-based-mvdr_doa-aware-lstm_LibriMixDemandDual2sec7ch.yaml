@@ -1,0 +1,76 @@
+output_dir: experiments/${project}/${name}/${now:%Y-%m-%d}-${now:%H-%M-%S}
+
+project: LibriMixDemandDual2sec7ch
+name: iter-wpe+mask-based-mvdr_doa-aware-lstm
+
+debug: false
+
+n_gpus: 1
+
+data_module:
+  _target_: src.dataset.doa_aware_dataset.LightningDataModule
+
+  batch_size: 1
+  num_workers: 3
+  n_gpus: ${n_gpus}
+
+  tr_path: /n/work1/fujita/manifest/libri_mix_demand_dual_2sec_20h_7ch_train.manifest
+  vl_path: /n/work1/fujita/manifest/libri_mix_demand_dual_2sec_2h_7ch_dev.manifest
+  tt_path: /n/work1/fujita/manifest/libri_mix_demand_dual_2sec_2h_7ch_test.manifest
+
+  tr_size: -1
+  vl_size: -1
+  tt_size: -1
+
+lightning_module:
+  _target_: src.modules.iter_wpe_mask_based_mvdr.IterWPEMaskBasedMVDR
+
+  lr: 1e-4
+  skip_nan_grad: True
+
+  delay: 3
+  tap: 5
+
+  mask_estimator:
+    _target_: src.models.doa_aware_lstm.DOAAwareLSTM
+    n_mics: 7
+    n_freq: 513 
+    input_lstm: 1024
+    hidden_lstm: 512
+    n_layer: 3
+
+trainer:
+  devices: ${n_gpus}
+  max_epochs: 10
+  max_steps: -1
+  val_check_interval: 1.0
+  accelerator: auto
+  # strategy: ddp
+  accumulate_grad_batches: 4.0
+  gradient_clip_val: 1.0
+  precision: 64
+  log_every_n_steps: 30
+  enable_progress_bar: True
+  num_sanity_val_steps: 0
+  check_val_every_n_epoch: 1
+  sync_batchnorm: True
+  benchmark: True
+  default_root_dir: ${output_dir}
+  use_distributed_sampler: False
+
+callbacks:
+- _target_: pytorch_lightning.callbacks.ModelCheckpoint
+  dirpath: ${output_dir}
+  monitor: valid_SDR
+  save_top_k: 1
+  save_last: False
+
+logger: 
+  _target_: pytorch_lightning.loggers.WandbLogger
+  project: ${project}
+  name: ${name}
+  save_dir: ${output_dir}
+
+hydra: 
+  run: 
+    dir: ${output_dir}

@@ -9,3 +9,14 @@ conda install -y \
 	typing-extensions cupy cudnn nccl tensorboard 
 pip install speechbrain 
 ```
+
+## Data
+- Librispeech: /n/rd7/librispeech/
+- WSJ: /n/rd7/wsj/
+- CHiME3: /n/rd7/chime/CHiME3
+
+
+## Run training 
+```
+PYTHONPATH=$(pwd) gpujob -d 0 python train.py --config-name=pretrain_mask-based-wpd_doa-aware-lstm_LibriMixDemandDual2sec7ch
+```

@@ -4,6 +4,7 @@
 import numpy as np
 import torch
 import torchaudio
+from opt_einsum import contract
 
 
 def make_feature(mixture, SV_FM, azim_idx):
@@ -45,7 +46,7 @@ def make_feature(mixture, SV_FM, azim_idx):
         feature = feature.reshape(n_time, -1)
 
         azim_rad = azim_idx * 5 / 180 * np.pi
-        doa = torch.tensor([np.cos(azim_rad), np.sin(azim_rad)], dtype=torch.float32)
+        doa = torch.tensor([torch.cos(azim_rad), torch.sin(azim_rad)], dtype=torch.float32)
         return feature, doa
 
     if mixture.ndim == 3:
@@ -54,7 +55,7 @@ def make_feature(mixture, SV_FM, azim_idx):
     elif mixture.ndim == 4:
         n_batch = mixture.shape[0]
         for b in range(n_batch):
-            feature_tmp, doa_tmp = _make_feature(mixture[b], SV_FM, azim_idx)
+            feature_tmp, doa_tmp = _make_feature(mixture[b], SV_FM[b], azim_idx[b])
             if b == 0:
                 feature = torch.zeros(
                     [n_batch, *feature_tmp.shape], dtype=feature_tmp.dtype, device=mixture.device
@@ -178,123 +179,3 @@ def MVDR(mixture_BMTF, mask_speech_BTF, mask_noise_BTF, ref_channel=0, eps=1e-7,
         return torch.einsum("bitf, bfi -> bft", mixture_BMTF, W_BFM.conj()), W_BFM
     else:
         return torch.einsum("bitf, bfi -> bft", mixture_BMTF, W_BFM.conj())
-
-
-def MA_MVDR(mixture_BMTF, mask_speech_BTF, mask_noise_BTF, weight=0.25, ref_channel=0, eps=1e-7, return_filter=False):
-    if mixture_BMTF.ndim == 3:
-        raise ValueError("MA_MVDR should be used for sequence data")
-    n_batch, n_mic, n_time, n_freq = mixture_BMTF.shape
-    speech_est_BMTF = mixture_BMTF * mask_speech_BTF.unsqueeze(1)
-    speech_SCM_BFMM = (
-        torch.einsum("bitf, bjtf -> bfij", speech_est_BMTF, speech_est_BMTF.conj())
-        + eps * torch.eye(n_mic, device=mixture_BMTF.device)[None, None]
-    )
-
-    noise_est_BMTF = mixture_BMTF * mask_noise_BTF.unsqueeze(1)
-    noise_SCM_BFMM = (
-        torch.einsum("bitf, bjtf -> bfij", noise_est_BMTF, noise_est_BMTF.conj())
-        + eps * torch.eye(n_mic, device=mixture_BMTF.device)[None, None]
-    )
-
-    sep_BFT = torch.zeros([n_batch, n_freq, n_time], dtype=mixture_BMTF.dtype, device=mixture_BMTF.device)
-    for b in range(n_batch):
-        if b == 0:
-            MA_speech_SCM_FMM = speech_SCM_BFMM[b]
-            MA_noise_SCM_FMM = noise_SCM_BFMM[b]
-        else:
-            MA_speech_SCM_FMM = (1 - weight) * MA_speech_SCM_FMM + weight * speech_SCM_BFMM[b]
-            MA_noise_SCM_FMM = (1 - weight) * MA_noise_SCM_FMM + weight * noise_SCM_BFMM[b]
-
-        MA_noise_SCMinv_FMM = torch.linalg.inv(MA_noise_SCM_FMM)
-        W_FM = torch.einsum("fij, fj -> fi", MA_noise_SCMinv_FMM, MA_speech_SCM_FMM[..., ref_channel]) / torch.sum(
-            torch.diagonal(MA_noise_SCMinv_FMM @ MA_speech_SCM_FMM, dim1=-2, dim2=-1), dim=-1
-        ).unsqueeze(-1)
-        sep_BFT[b] = torch.einsum("itf, fi -> ft", mixture_BMTF[b], W_FM.conj())
-    return sep_BFT
-
-
-def MVDR_SV(mixture_BMTF, mask_speech_BTF, mask_noise_BTF, eps=1e-7, return_filter=False):
-    if mixture_BMTF.ndim == 3:
-        mixture_BMTF = mixture_BMTF[None]
-        mask_speech_BTF = mask_speech_BTF[None]
-        mask_noise_BTF = mask_noise_BTF[None]
-    n_mic = mixture_BMTF.shape[1]
-    speech_est_BMTF = mixture_BMTF * mask_speech_BTF.unsqueeze(1)
-    speech_SCM_BFMM = (
-        torch.einsum("bitf, bjtf -> bfij", speech_est_BMTF, speech_est_BMTF.conj())
-        + eps * torch.eye(n_mic, device=mixture_BMTF.device)[None, None]
-    )
-
-    noise_est_BMTF = mixture_BMTF * mask_noise_BTF.unsqueeze(1)
-    noise_SCMinv_BFMM = torch.linalg.inv(torch.einsum("bitf, bjtf -> bfij", noise_est_BMTF, noise_est_BMTF.conj()))
-
-    # SV_BFM = speech_SCM_BFMM[..., ref_channel] / torch.linalg.norm(
-    #     speech_SCM_BFMM[..., ref_channel], dim=-1, keepdim=True
-    # )
-
-    _, eig_vec_BFMM = torch.linalg.eigh(speech_SCM_BFMM)
-    W_BFM = torch.einsum("bfij, bfj -> bfi", noise_SCMinv_BFMM, eig_vec_BFMM[..., -1])
-    W_BFM = W_BFM / torch.einsum("bfm, bfm -> bf", eig_vec_BFMM[..., -1].conj(), W_BFM)[..., None]
-
-    # W_BFM = torch.einsum("bfij, bfj -> bfi", noise_SCMinv_BFMM, speech_SCM_BFMM[..., ref_channel]) / torch.sum(
-    #     torch.diagonal(noise_SCMinv_BFMM @ speech_SCM_BFMM, dim1=-2, dim2=-1), dim=-1
-    # ).unsqueeze(-1)
-
-    if return_filter:
-        return torch.einsum("bitf, bfi -> bft", mixture_BMTF, W_BFM.conj()), W_BFM
-    else:
-        return torch.einsum("bitf, bfi -> bft", mixture_BMTF, W_BFM.conj())
-
-
-def GEV(mixture_BMTF, mask_speech_BTF, mask_noise_BTF, eps=1e-7, return_filter=False):
-    if mixture_BMTF.ndim == 3:
-        mixture_BMTF = mixture_BMTF[None]
-        mask_speech_BTF = mask_speech_BTF[None]
-        mask_noise_BTF = mask_noise_BTF[None]
-    n_mic = mixture_BMTF.shape[1]
-    speech_est_BMTF = mixture_BMTF * mask_speech_BTF.unsqueeze(1)
-    speech_SCM_BFMM = (
-        torch.einsum("bitf, bjtf -> bfij", speech_est_BMTF, speech_est_BMTF.conj())
-        + eps * torch.eye(n_mic, device=mixture_BMTF.device)[None, None]
-    )
-
-    noise_est_BMTF = mixture_BMTF * mask_noise_BTF.unsqueeze(1)
-    noise_SCMinv_BFMM = torch.linalg.inv(
-        torch.einsum("bitf, bjtf -> bfij", noise_est_BMTF, noise_est_BMTF.conj())
-        + eps * torch.eye(n_mic, device=mixture_BMTF.device)[None, None]
-    )
-
-    tmp = torch.einsum("bfij, bfjk -> bfik", noise_SCMinv_BFMM, speech_SCM_BFMM)
-    eig_val_BFM, eig_vec_BFMM = torch.linalg.eig(tmp)
-    sorted_idx = torch.real(eig_val_BFM).argsort(axis=-1)
-    eig_vec_BFMM = torch.take_along_dim(eig_vec_BFMM, sorted_idx[..., None, :], dim=-1)
-    W_BFM = eig_vec_BFMM[:, :, :, -1]
-
-    W_BFM[:, 1:] *= torch.exp(-1j * torch.angle(torch.einsum("bfi, bfi -> bf", W_BFM[:, 1:], W_BFM[:, :-1])))[
-        :, :, None
-    ]
-    if return_filter:
-        return torch.einsum("bitf, bfi -> bft", mixture_BMTF, W_BFM.conj()), W_BFM
-    else:
-        return torch.einsum("bitf, bfi -> bft", mixture_BMTF, W_BFM.conj())
-
-
-def MUSIC(mixture_BMTF, mask_BT, SV_BFM, start_idx=0, end_idx=None, eps=1e-2):
-    if mixture_BMTF.ndim == 3:
-        mixture_BMTF = mixture_BMTF[None]
-        mask_BT = mask_BT[None]
-    n_mic = mixture_BMTF.shape[1]
-    masked_mixture_BMTF = mixture_BMTF * mask_BT[:, None, :, None]
-    SCM_BFMM = (
-        torch.einsum("bitf, bjtf -> bfij", masked_mixture_BMTF, masked_mixture_BMTF.conj())
-        + eps * torch.eye(n_mic, device=mixture_BMTF.device)[None, None]
-    )
-
-    _, eig_vec_BFMM = torch.linalg.eigh(SCM_BFMM)
-    music_spec = torch.einsum("bfi, bfim -> bfm", SV_BFM.conj(), eig_vec_BFMM[..., :-1])
-    if end_idx is None:
-        music_spec = torch.abs(music_spec[:, start_idx:]).sum(dim=(1, 2))
-    else:
-        music_spec = torch.abs(music_spec[:, start_idx:end_idx]).sum(dim=(1, 2))
-
-    return music_spec

@@ -1,3 +1,11 @@
+*.png
+*.flac
+*.wav
+*.sh
+
+notebook/
+experiments/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
