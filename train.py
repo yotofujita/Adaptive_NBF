@@ -16,20 +16,29 @@ def main(cfg):
     if hasattr(cfg, "ckpt_path"):
         model.load_state_dict(torch.load(cfg.ckpt_path)["state_dict"])
 
-    if not cfg.debug:
-        logger = instantiate(cfg.logger)
-        callbacks = [instantiate(cb) for cb in cfg.callbacks]
-        trainer = pl.Trainer(
-            logger=logger, 
-            callbacks=callbacks, 
-            **cfg.trainer
-        )
-    else:
+    if cfg.debug:
         print("Debug mode.")
         trainer = pl.Trainer(
             logger=False, 
             enable_checkpointing=False, 
             callbacks=[], 
+            **cfg.trainer
+        )
+    elif cfg.testonly:
+        print("Test mode.")
+        logger = instantiate(cfg.logger)
+        trainer = pl.Trainer(
+            logger=logger, 
+            enable_checkpointing=False, 
+            callbacks=[], 
+            **cfg.trainer
+        )
+    else:
+        logger = instantiate(cfg.logger)
+        callbacks = [instantiate(cb) for cb in cfg.callbacks]
+        trainer = pl.Trainer(
+            logger=logger, 
+            callbacks=callbacks, 
             **cfg.trainer
         )
     

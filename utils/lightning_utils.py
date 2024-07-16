@@ -1,3 +1,6 @@
+import os
+import logging
+
 import torch
 import pytorch_lightning as pl
 
@@ -8,6 +11,61 @@ from torchmetrics.audio import (
 )
 from torchmetrics.audio.pesq import PerceptualEvaluationSpeechQuality
 from torchmetrics.audio import ShortTimeObjectiveIntelligibility
+
+from speechbrain.inference.ASR import EncoderDecoderASR
+from torchmetrics.text import WordErrorRate
+
+
+class TextLogger(pl.loggers.Logger):
+    def __init__(self, log_dir, name="log"):
+        super().__init__()
+        
+        self.log_dir = log_dir
+        self.name = name
+        
+        os.makedirs(log_dir, exist_ok=True)
+        self.log_file = os.path.join(log_dir, f"{self.name}.log")
+        
+        # Set up logging to the file
+        self.logger = logging.getLogger(self.name)
+        self.logger.setLevel(logging.INFO)
+        fh = logging.FileHandler(self.log_file)
+        fh.setLevel(logging.INFO)
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        fh.setFormatter(formatter)
+        self.logger.addHandler(fh)
+    
+    @property
+    def experiment(self):
+        # Return the experiment object associated with this logger
+        return self.logger
+    
+    @property
+    def version(self):
+        # Return the version of the experiment
+        return "1.0"
+
+    @property
+    def name(self):
+        # Return the name of the experiment
+        return self.name
+
+    def log_hyperparams(self, params):
+        # Log hyperparameters
+        self.logger.info(f"Hyperparameters: {params}")
+
+    def log_metrics(self, metrics, step):
+        # Log metrics
+        self.logger.info(f"Step {step}: {metrics}")
+
+    def save(self):
+        # Any logic you need to save the logger state
+        pass
+
+    def finalize(self, status):
+        # Any finalization logic when the experiment is done
+        self.logger.info(f"Finalizing logger with status: {status}")
+
 
 
 class BaseDataModule(pl.LightningDataModule):
@@ -59,19 +117,24 @@ class BaseDataModule(pl.LightningDataModule):
 
 
 class BaseModule(pl.LightningModule):
-    def __init__(self, lr, skip_nan_grad):
+    def __init__(self, lr=1e-4, skip_nan_grad=True, eval_asr=False, sr=16000):
         super().__init__()
         
         self.lr = lr
         self.skip_nan_grad = skip_nan_grad
+        self.eval_asr = eval_asr
+        self.sr = sr
         
         self.snr = SignalNoiseRatio()
         self.sdr = SignalDistortionRatio()
         self.si_sdr = ScaleInvariantSignalDistortionRatio()
-        self.pesq = PerceptualEvaluationSpeechQuality(16000, 'wb')
-        self.stoi = ShortTimeObjectiveIntelligibility(16000, False)
-        
+        self.pesq = PerceptualEvaluationSpeechQuality(sr, 'wb')
+        self.stoi = ShortTimeObjectiveIntelligibility(sr, False)
         self.metrics = {"loss": [], "SNR": [], "SDR": [], "SI-SDR": [], "PESQ": [], "STOI": []}
+        
+        if eval_asr:
+            self.wer = WordErrorRate()
+            self.estimates = []
     
     def training_step(self, batch, batch_idx):
         _, src, *_ = batch
@@ -105,14 +168,32 @@ class BaseModule(pl.LightningModule):
             self.metrics[key].clear()
 
     def test_step(self, batch, batch_idx):
-        _, src, *_ = batch
-        est, *_ = self.step(batch)
+        if not self.eval_asr:
+            _, src, *_ = batch
+            est, *_ = self.step(batch)
         
-        self.metrics["SNR"].append(self.snr(est, src[:, 0]))
-        self.metrics["SDR"].append(self.sdr(est, src[:, 0]))
-        self.metrics["SI-SDR"].append(self.si_sdr(est, src[:, 0]))
-        self.metrics["PESQ"].append(self.pesq(est, src[:, 0]))
-        self.metrics["STOI"].append(self.stoi(est, src[:, 0]))
+            self.metrics["loss"].append(- self.sdr(est, src[:, 0]))
+            self.metrics["SNR"].append(self.snr(est, src[:, 0]))
+            self.metrics["SDR"].append(self.sdr(est, src[:, 0]))
+            self.metrics["SI-SDR"].append(self.si_sdr(est, src[:, 0]))
+            self.metrics["PESQ"].append(self.pesq(est, src[:, 0]))
+            self.metrics["STOI"].append(self.stoi(est, src[:, 0]))
+        
+        else:  # ASR target is included at the end for measuring WER
+            if not hasattr(self, "asr_target"):
+                self.asr_target = batch[-1][0]
+
+            _, src, *_ = batch[:-1]
+            est, *_ = self.step(batch[:-1])
+    
+            self.metrics["loss"].append(- self.sdr(est, src[:, 0]))
+            self.metrics["SNR"].append(self.snr(est, src[:, 0]))
+            self.metrics["SDR"].append(self.sdr(est, src[:, 0]))
+            self.metrics["SI-SDR"].append(self.si_sdr(est, src[:, 0]))
+            self.metrics["PESQ"].append(self.pesq(est, src[:, 0]))
+            self.metrics["STOI"].append(self.stoi(est, src[:, 0]))
+            
+            self.estimates.append(est)
 
     def on_test_epoch_end(self):
         super().on_test_epoch_end()
@@ -124,6 +205,33 @@ class BaseModule(pl.LightningModule):
                 sync_dist=True)
 
             self.metrics[key].clear()
+
+        if self.eval_asr:
+            asr_model = EncoderDecoderASR.from_hparams(
+                source="speechbrain/asr-transformer-transformerlm-librispeech",  
+                savedir="src/pretrained_models/asr-transformer-transformerlm-librispeech",
+                run_opts={"device": "cuda", "dtype": "float32"}
+            )
+
+            speech_est = torch.concatenate(self.estimates, dim=0)
+            import soundfile as sf
+            sf.write("tmp.wav", speech_est.flatten().cpu(), samplerate=self.sr)
+            speech_est = speech_est.reshape(10, -1, speech_est.shape[-1])
+            
+            transcriptions = []
+            from tqdm import tqdm
+            print("Transcribing.")
+            for se in tqdm(speech_est):
+                transcriptions.extend(asr_model.transcribe_batch(
+                    se, 
+                    wav_lens=torch.tensor([1. for _ in range(se.shape[0])])
+                )[0])
+                
+            transcription = " ".join(transcriptions)
+
+            
+            self.log("test_WER", self.wer(transcription, self.asr_target.replace(".", "")), sync_dist=True)
+            
 
     def on_after_backward(self):
         super().on_after_backward()
@@ -162,44 +270,3 @@ class BaseOracleModule(BaseModule):
         self.log("train_loss", loss, sync_dist=True)
         
         return loss + mask.mean()
-
-
-class BaseBSSModule(BaseModule):
-    def test_step(self, batch, batch_idx):
-        _, src, *_ = batch
-        est, *_ = self.step(batch)
-        
-        B, N, _ = est.shape
-        
-        sdrs = []
-        for e, s in zip(est, src):
-            ss = []
-            for i in range(self.n_srcs+1):
-                ss.append(self.sdr(e[i], s[0]))
-            sdrs.append(torch.stack(ss))  # [N]
-        sdrs = torch.stack(sdrs, dim=0)  # [B, N]
-
-        target_idx = torch.argmax(sdrs, dim=1)  # [B]
-        target_idx = torch.linspace(0, (B-1)*N, B).to(target_idx.device) + target_idx
-        target_est = est.flatten(0, 1)[target_idx.to(torch.int)]
-        
-        self.metrics["SNR"].append(self.snr(target_est, src[:, 0]))
-        self.metrics["SDR"].append(self.sdr(target_est, src[:, 0]))
-        self.metrics["SI-SDR"].append(self.si_sdr(target_est, src[:, 0]))
-        self.metrics["PESQ"].append(self.pesq(target_est, src[:, 0]))
-        self.metrics["STOI"].append(self.stoi(target_est, src[:, 0]))
-        
-        return self.metrics
-
-    def on_test_epoch_end(self):
-        super().on_test_epoch_end()
-        
-        for key in self.metrics.keys():
-            self.log(
-                f"test_{key}", 
-                torch.nanmean(torch.stack(self.metrics[key])), 
-                sync_dist=True)
-
-            self.metrics[key].clear()
-    
-

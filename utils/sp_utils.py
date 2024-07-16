@@ -16,7 +16,12 @@ def calc_sv(theta, mic_shape, n_freq, sr=16000, ref_mic=0, c=pra.parameters.Phys
     k1 = deg2pos(theta)
     m = mic_shape - mic_shape[..., ref_mic][..., None]
     freq = torch.linspace(0, sr / 2, n_freq).to(k1.device).to(k1.dtype)
-    return torch.exp(-2j*torch.pi*contract("bm,f->bfm", contract("bd,bdm->bm", k1, m/c), freq))
+    if k1.dim() == 1:
+        return torch.exp(2j*torch.pi*(k1@m/c)*freq[:, None])
+    elif k1.dim() == 2:
+        return torch.exp(2j*torch.pi*contract("bm,f->bfm", contract("bd,bdm->bm", k1, m/c), freq))
+    else:
+        assert False
 
 
 def calc_sv2(theta, mic_shape, n_freq, sr=16000, ref_mic=0, c=pra.parameters.Physics().get_sound_speed()):
