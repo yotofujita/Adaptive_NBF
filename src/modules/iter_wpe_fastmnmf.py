@@ -3,14 +3,14 @@ import torchaudio
 
 from opt_einsum import contract
 
-from utils.import_utils import instantiate
-from utils.lightning_utils import BaseBSSModule
+from utils.lightning_utils import BaseModule
 from utils.FastMNMF2 import FastMNMF2
+from utils.sp_utils import calc_sv
 
 
-class IterWPEFastMNMF(BaseBSSModule):
-    def __init__(self, delay=3, tap=5, n_srcs=2, lr=1e-3, skip_nan_grad=False, **kwargs):
-        super().__init__(lr, skip_nan_grad)
+class IterWPEFastMNMF(BaseModule):
+    def __init__(self, delay=3, tap=5, n_srcs=2, lr=1e-3, skip_nan_grad=False, eval_asr=False, **kwargs):
+        super().__init__(lr=lr, skip_nan_grad=skip_nan_grad, eval_asr=eval_asr)
         
         self.delay = delay
         self.tap = tap
@@ -32,28 +32,28 @@ class IterWPEFastMNMF(BaseBSSModule):
         )
 
     def step(self, batch):
-        mix, *_ = batch  # [B, M, S], [B, M, S], [B,]
+        mix, _, doa, mic_shape = batch  # [B, M, S], [B, M, S], [B,]
 
         stft = self.stft.to(self.device)
         istft = self.istft.to(self.device)
 
         # STFT
         mix_stft = stft(mix)  # [B, M, F, T]
-
+    
         # Dereverberation
         mix_stft_dereverberated = self.dereverberate(mix_stft, delay=self.delay, tap=self.tap)  # [B, F, T]
-        
+
         # Separation
         sep_stft = []
-        for msd in mix_stft_dereverberated:
-            sep_stft.append(self.separate(msd))
-        sep_stft = torch.stack(sep_stft, dim=0)  # [B, N, F, T]
+        for mx, d, mc in zip(mix_stft_dereverberated, doa, mic_shape):
+            sep_stft.append(self.separate(mx, d, mc))
+        sep_stft = torch.stack(sep_stft, dim=0)  # [B, F, T]
 
         # Inverse STFT
-        sep = istft(sep_stft)  # [N, S]
+        sep = istft(sep_stft)  # [B, S]
         
         return sep, sep_stft
-    
+
     @staticmethod
     def dereverberate(mix_stft, delay=3, tap=5, eps=1e-4):
 
@@ -67,7 +67,7 @@ class IterWPEFastMNMF(BaseBSSModule):
     
         w = torch.zeros((B, F, M, M*K), device=mix_stft.device, dtype=mix_stft.dtype)
 
-        for _ in range(3):
+        for _ in range(10):
             est = mix_stft - contract("bfkl, blft -> bkft", w.conj(), mix_tilde)
             sigma = torch.mean(torch.abs(est) ** 2, dim=1)
             sigma = sigma[:, None].expand((B, M*K, F, T))  # [B, M*K, F, T]
@@ -83,13 +83,19 @@ class IterWPEFastMNMF(BaseBSSModule):
 
             est = mix_stft - contract("bfkl,blft->bkft", w.conj(), mix_tilde)
         
-        return est   
-
-    def separate(self, mix_stft):
-        self.separater.load_spectrogram(mix_stft.permute((1, 2, 0)), sample_rate=16000)
-        est = self.separater.solve(n_iter=100)  # [N, F, T]
-        
         return est
+
+    def separate(self, mix_stft, doa, mic_shape):
+        self.separater.load_spectrogram(mix_stft.permute((1, 2, 0)), sample_rate=16000)
+        est = self.separater.solve(n_iter=200)  # [N, F, T]
+    
+        G = self.separater.get_SCM()  # [N, F, M, M]
+        _, v = torch.linalg.eigh(G)  # [N, F, M], [N, F, M, M]
+        sv = calc_sv(doa, mic_shape, est.shape[1]).to(G.device).to(G.dtype)  # [F, M]
+        l = (contract("fl,nflm->nfm", sv, v[:, :, :, :-1]).abs()**2).sum(dim=-1).sum(dim=-1)  # [N]
+        target_idx = torch.argmin(l).item()
+        
+        return est[target_idx]
         
 
 if __name__ == "__main__":
@@ -104,7 +110,5 @@ if __name__ == "__main__":
     src = torch.rand((cfg1.batchsize, cfg1.n_mics, 32000), dtype=torch.float64).to(device)
     doa = torch.rand((cfg1.batchsize), dtype=torch.float64).to(device)
     mic_shape = torch.rand((cfg1.batchsize, 2, cfg1.n_mics), dtype=torch.float64).to(device)
-    metrics = module.test_step((mix, src, doa, mic_shape), None)
-    for key in metrics.keys():
-        print(key, metrics[key][0].item())
+    sep = module.step((mix, src, doa, mic_shape))
     

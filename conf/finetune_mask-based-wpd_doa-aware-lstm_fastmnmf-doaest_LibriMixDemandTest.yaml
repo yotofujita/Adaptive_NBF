@@ -1,34 +1,37 @@
-output_dir: experiments/${project}/${name}/${now:%Y-%m-%d}-${now:%H-%M-%S}
+output_dir: experiments/${project}/${name}_total_s=${data_module.total_s}_id=${id}
 
-project: LibriMixDemandDual2sec7ch
-name: mask-based-wpd_doa-aware-lstm
+project: finetune_mask-based-wpd_doa-aware-lstm_fastmnmf-doaest_LibriMixDemandTest
+name: null
+id: null
 
-debug: false
-
-testonly: false
-# ckpt_path: /home/fujita/research/NeuralBF-IROS2022/experiments/LibriMixDemandDual2sec7ch/mask-based-wpd_doa-aware-lstm/2024-07-03-13-06-05/epoch=9-step=90000.ckpt
+debug: False
+testonly: False
+ckpt_path: /n/work3/fujita/research/NeuralBF-IROS2022/experiments/LibriMixDemandDual2sec7ch/mask-based-wpd_doa-aware-lstm/2024-07-11-18-39-41/epoch=18-step=171000.ckpt
 
 n_gpus: 1
 
 data_module:
-  _target_: src.dataset.doa_aware_dataset.LightningDataModule
+  _target_: src.dataset.doa_aware_adapt_fastmnmf_asr_doaest_dataset.LightningDataModule
 
   batch_size: 1
   num_workers: 3
   n_gpus: ${n_gpus}
 
-  tr_path: /n/work1/fujita/manifest/libri_mix_demand_dual_2sec_20h_7ch_train.manifest
-  vl_path: /n/work1/fujita/manifest/libri_mix_demand_dual_2sec_2h_7ch_dev.manifest
-  tt_path: /n/work1/fujita/manifest/libri_mix_demand_dual_2sec_2h_7ch_test.manifest
+  json_path: /n/work1/fujita/json/libri_mix_demand_test_${name}/${id}.json
+  manifest_path: /n/work1/fujita/manifest/libri_mix_demand_dual_2sec_20h_7ch_train.manifest
 
-  tr_size: -1
-  vl_size: -1
-  tt_size: -1
+  total_s: null
+  n_srcs: 5
+  threshold: 10.0
+
+  size: -1
 
 lightning_module:
   _target_: src.modules.mask_based_wpd.MaskBasedWPD
 
-  lr: 1e-4
+  eval_asr: True
+
+  lr: 4e-5
   skip_nan_grad: True
 
   delay: 3
@@ -44,7 +47,7 @@ lightning_module:
 
 trainer:
   devices: ${n_gpus}
-  max_epochs: 20
+  max_epochs: 1
   max_steps: -1
   val_check_interval: 1.0
   accelerator: auto
@@ -65,13 +68,11 @@ callbacks:
 - _target_: pytorch_lightning.callbacks.ModelCheckpoint
   dirpath: ${output_dir}
   monitor: valid_loss
-  save_top_k: 3
+  save_top_k: 1
   save_last: False
 
 logger: 
-  _target_: pytorch_lightning.loggers.WandbLogger
-  project: ${project}
-  name: ${name}
+  _target_: pytorch_lightning.loggers.CSVLogger
   save_dir: ${output_dir}
 
 hydra: 

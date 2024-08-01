@@ -1,8 +1,7 @@
-output_dir: experiments/${project}/${name}_total_s=${data_module.total_s}_id=${id}
+output_dir: experiments/${project}/${name}_total_s=${data_module.total_s}
 
-project: fastmnmf_LibriMixDemandTest
+project: iter_wpe_fastmnmf_LibriMixDemandTest
 name: null
-id: null
 
 debug: False
 testonly: True
@@ -16,24 +15,21 @@ data_module:
   num_workers: 3
   n_gpus: ${n_gpus}
 
-  json_path: /n/work1/fujita/json/libri_mix_demand_test_${name}/${id}.json
+  json_path: /n/work1/fujita/json/libri_mix_demand_test_${name}.json
   manifest_path: /n/work1/fujita/manifest/libri_mix_demand_dual_2sec_20h_7ch_train.manifest
 
   total_s: null
 
-  test_duration: 30.0
-
   size: -1
 
 lightning_module:
-  _target_: src.modules.fastmnmf.FastMNMF
+  _target_: src.modules.iter_wpe_fastmnmf.IterWPEFastMNMF
 
   eval_asr: True
-  asr_batch_size: 4
 
   delay: 3
   tap: 5
-  n_srcs: 5
+  n_srcs: 2
 
 trainer:
   devices: ${n_gpus}

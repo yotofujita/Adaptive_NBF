@@ -3,15 +3,14 @@ import torchaudio
 
 from opt_einsum import contract
 
-from utils.import_utils import instantiate
 from utils.lightning_utils import BaseModule
 from utils.FastMNMF2 import FastMNMF2
 from utils.sp_utils import calc_sv
 
 
 class FastMNMF(BaseModule):
-    def __init__(self, delay=3, tap=5, n_srcs=2, lr=1e-3, skip_nan_grad=False, eval_asr=False, **kwargs):
-        super().__init__(lr=lr, skip_nan_grad=skip_nan_grad, eval_asr=eval_asr)
+    def __init__(self, delay=3, tap=5, n_srcs=5, lr=1e-3, skip_nan_grad=False, eval_asr=False, asr_batch_size=10, **kwargs):
+        super().__init__(lr=lr, skip_nan_grad=skip_nan_grad, eval_asr=eval_asr, asr_batch_size=asr_batch_size)
         
         self.delay = delay
         self.tap = tap
@@ -22,7 +21,7 @@ class FastMNMF(BaseModule):
         self.istft = torchaudio.transforms.InverseSpectrogram(n_fft=1024, hop_length=256)
         
         self.separater = FastMNMF2(
-            n_source=n_srcs+1,
+            n_source=n_srcs,
             n_basis=16,
             device="cuda",
             init_SCM="twostep",
@@ -58,7 +57,7 @@ class FastMNMF(BaseModule):
     
         G = self.separater.get_SCM()  # [N, F, M, M]
         _, v = torch.linalg.eigh(G)  # [N, F, M], [N, F, M, M]
-        sv = calc_sv(doa, mic_shape, est.shape[1]).to(G.device).to(G.dtype)  # [F, M]
+        sv = calc_sv(doa+180, mic_shape, est.shape[1]).to(G.device).to(G.dtype)  # [F, M]
         l = (contract("fl,nflm->nfm", sv, v[:, :, :, :-1]).abs()**2).sum(dim=-1).sum(dim=-1)  # [N]
         target_idx = torch.argmin(l).item()
         

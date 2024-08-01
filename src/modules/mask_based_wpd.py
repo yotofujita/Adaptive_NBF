@@ -8,7 +8,7 @@ from utils.lightning_utils import BaseModule
 
 
 class MaskBasedWPD(BaseModule):
-    def __init__(self, mask_estimator, delay=3, tap=5, threshold=-10, lr=1e-3, skip_nan_grad=False, eval_asr=False, **kwargs):
+    def __init__(self, mask_estimator, delay=3, tap=5, threshold=-10, lr=1e-3, skip_nan_grad=False, eval_asr=False, asr_batch_size=10, **kwargs):
         super().__init__(lr=lr, skip_nan_grad=skip_nan_grad, eval_asr=eval_asr)
 
         self.mask_estimator = instantiate(mask_estimator)

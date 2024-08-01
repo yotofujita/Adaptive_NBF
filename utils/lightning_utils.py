@@ -1,16 +1,19 @@
 import os
 import logging
 
+import numpy as np
+
 import torch
 import pytorch_lightning as pl
 
 from torchmetrics.audio import (
     SignalNoiseRatio,
     SignalDistortionRatio,
-    ScaleInvariantSignalDistortionRatio
+    ScaleInvariantSignalDistortionRatio,
+    ShortTimeObjectiveIntelligibility
 )
 from torchmetrics.audio.pesq import PerceptualEvaluationSpeechQuality
-from torchmetrics.audio import ShortTimeObjectiveIntelligibility
+from torchmetrics.audio.srmr import SpeechReverberationModulationEnergyRatio
 
 from speechbrain.inference.ASR import EncoderDecoderASR
 from torchmetrics.text import WordErrorRate
@@ -117,12 +120,13 @@ class BaseDataModule(pl.LightningDataModule):
 
 
 class BaseModule(pl.LightningModule):
-    def __init__(self, lr=1e-4, skip_nan_grad=True, eval_asr=False, sr=16000):
+    def __init__(self, lr=1e-4, skip_nan_grad=True, eval_asr=False, asr_batch_size=10, sr=16000):
         super().__init__()
         
         self.lr = lr
         self.skip_nan_grad = skip_nan_grad
         self.eval_asr = eval_asr
+        self.asr_batch_size = asr_batch_size
         self.sr = sr
         
         self.snr = SignalNoiseRatio()
@@ -130,7 +134,8 @@ class BaseModule(pl.LightningModule):
         self.si_sdr = ScaleInvariantSignalDistortionRatio()
         self.pesq = PerceptualEvaluationSpeechQuality(sr, 'wb')
         self.stoi = ShortTimeObjectiveIntelligibility(sr, False)
-        self.metrics = {"loss": [], "SNR": [], "SDR": [], "SI-SDR": [], "PESQ": [], "STOI": []}
+        self.srmr = SpeechReverberationModulationEnergyRatio(sr)
+        self.metrics = {"loss": [], "SNR": [], "SDR": [], "SI-SDR": [], "PESQ": [], "STOI": [], "SRMR": []}
         
         if eval_asr:
             self.wer = WordErrorRate()
@@ -153,8 +158,12 @@ class BaseModule(pl.LightningModule):
         self.metrics["SNR"].append(self.snr(est, src[:, 0]))
         self.metrics["SDR"].append(self.sdr(est, src[:, 0]))
         self.metrics["SI-SDR"].append(self.si_sdr(est, src[:, 0]))
-        self.metrics["PESQ"].append(self.pesq(est, src[:, 0]))
+        try:
+            self.metrics["PESQ"].append(self.pesq(est, src[:, 0]))
+        except:
+            self.metrics["PESQ"].append(torch.tensor(torch.nan, device=est.device, dtype=est.dtype))
         self.metrics["STOI"].append(self.stoi(est, src[:, 0]))
+        self.metrics["SRMR"].append(self.srmr(est))
 
     def on_validation_epoch_end(self):
         super().on_validation_epoch_end()
@@ -176,7 +185,10 @@ class BaseModule(pl.LightningModule):
             self.metrics["SNR"].append(self.snr(est, src[:, 0]))
             self.metrics["SDR"].append(self.sdr(est, src[:, 0]))
             self.metrics["SI-SDR"].append(self.si_sdr(est, src[:, 0]))
-            self.metrics["PESQ"].append(self.pesq(est, src[:, 0]))
+            try:
+                self.metrics["PESQ"].append(self.pesq(est, src[:, 0]))
+            except:
+                self.metrics["PESQ"].append(torch.tensor(torch.nan, device=est.device, dtype=est.dtype))
             self.metrics["STOI"].append(self.stoi(est, src[:, 0]))
         
         else:  # ASR target is included at the end for measuring WER
@@ -190,8 +202,12 @@ class BaseModule(pl.LightningModule):
             self.metrics["SNR"].append(self.snr(est, src[:, 0]))
             self.metrics["SDR"].append(self.sdr(est, src[:, 0]))
             self.metrics["SI-SDR"].append(self.si_sdr(est, src[:, 0]))
-            self.metrics["PESQ"].append(self.pesq(est, src[:, 0]))
+            try:
+                self.metrics["PESQ"].append(self.pesq(est, src[:, 0]))
+            except:
+                self.metrics["PESQ"].append(torch.tensor(torch.nan, device=est.device, dtype=est.dtype))
             self.metrics["STOI"].append(self.stoi(est, src[:, 0]))
+            self.metrics["SRMR"].append(self.srmr(est))
             
             self.estimates.append(est)
 
@@ -214,23 +230,26 @@ class BaseModule(pl.LightningModule):
             )
 
             speech_est = torch.concatenate(self.estimates, dim=0)
-            import soundfile as sf
-            sf.write("tmp.wav", speech_est.flatten().cpu(), samplerate=self.sr)
-            speech_est = speech_est.reshape(10, -1, speech_est.shape[-1])
+            speech_est, speech_est_rest = speech_est[:(speech_est.shape[0] - speech_est.shape[0] % (2*self.asr_batch_size))], speech_est[(speech_est.shape[0] - speech_est.shape[0] % (2*self.asr_batch_size)):]
+            speech_est = speech_est.reshape(2, self.asr_batch_size, -1)
+            speech_est_rest = speech_est_rest.reshape(1, -1)
             
             transcriptions = []
-            from tqdm import tqdm
             print("Transcribing.")
-            for se in tqdm(speech_est):
+            for se in speech_est:
                 transcriptions.extend(asr_model.transcribe_batch(
                     se, 
                     wav_lens=torch.tensor([1. for _ in range(se.shape[0])])
                 )[0])
+            if speech_est_rest.shape[-1] != 0:
+                transcriptions.extend(asr_model.transcribe_batch(
+                    speech_est_rest, 
+                    wav_lens=torch.tensor([1. for _ in range(speech_est_rest.shape[0])])
+                )[0])
                 
             transcription = " ".join(transcriptions)
 
-            
-            self.log("test_WER", self.wer(transcription, self.asr_target.replace(".", "")), sync_dist=True)
+            self.log("test_WER", self.wer(transcription, self.asr_target), sync_dist=True)
             
 
     def on_after_backward(self):

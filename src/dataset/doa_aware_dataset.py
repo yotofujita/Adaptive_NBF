@@ -94,11 +94,9 @@ class Dataset(torch.utils.data.Dataset):
 
 
 if __name__ == "__main__":
-    manifest_path = "/n/work1/fujita/manifest/libri_mix_demand_dual_2sec_short.manifest"
-    datamodule = LightningDataModule(2, 1, 
-        "/n/work1/fujita/manifest/libri_mix_demand_dual_2sec_short.manifest",
-        "/n/work1/fujita/manifest/libri_mix_demand_dual_2sec_short.manifest")
-    datamodule.setup()
+    manifest_path = "/n/work1/fujita/manifest/libri_mix_demand_dual_2sec_1m_7ch_short.manifest"
+    datamodule = LightningDataModule(2, 1, manifest_path, manifest_path, manifest_path)
+    datamodule.setup(stage="fit")
     dataloader = datamodule.train_dataloader()
     for mix, src, spk_doa, mic_shape in dataloader:
         print(mix.shape, mix.dtype)
