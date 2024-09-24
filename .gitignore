@@ -2,8 +2,9 @@
 *.flac
 *.wav
 *.sh
+*.pdf
 
-notebook/
+LibriMixDEMAND/
 experiments/
 src/pretrained_models/
 

@@ -20,3 +20,15 @@ pip install speechbrain
 ```
 PYTHONPATH=$(pwd) gpujob -d 0 python train.py --config-name=pretrain_mask-based-wpd_doa-aware-lstm_LibriMixDemandDual2sec7ch
 ```
+
+## Run adaptation evaluation 
+```
+# w/o adaptation 
+
+PYTHONPATH=$(pwd) gpujob -d 1 /n/work3/fujita/miniconda3/envs/nbf/bin/python train.py --config-name=finetune_mask-based-wpd_doa-aware-lstm_iter-wpe-fastmnmf-doaest_LibriMixDemandTest name='n_spks\=2_rt60\=0.5_noise-snr\=30.0' id=17 testonly=true
+
+
+# w/ adaptation 
+
+PYTHONPATH=$(pwd) gpujob -d 1 /n/work3/fujita/miniconda3/envs/nbf/bin/python train.py --config-name=finetune_mask-based-wpd_doa-aware-lstm_iter-wpe-fastmnmf-doaest_LibriMixDemandTest name='n_spks\=4_rt60\=0.5_noise-snr\=30.0' id=35 data_module.total_s=240
+```

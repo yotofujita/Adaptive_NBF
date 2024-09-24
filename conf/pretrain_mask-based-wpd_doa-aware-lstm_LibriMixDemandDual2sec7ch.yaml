@@ -1,6 +1,6 @@
 output_dir: experiments/${project}/${name}/${now:%Y-%m-%d}-${now:%H-%M-%S}
 
-project: LibriMixDemandDual2sec7ch
+project: pretrain_mask-based-wpd_LibriMixDemandDual2sec7ch
 name: mask-based-wpd_doa-aware-lstm
 
 debug: false
