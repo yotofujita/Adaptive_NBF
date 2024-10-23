@@ -7,7 +7,7 @@ from utils.lightning_utils import BaseDataModule
 
 
 class LightningDataModule(BaseDataModule):
-    def __init__(self, batch_size, num_workers, tr_path, vl_path, tt_path, n_gpus=-1, tr_size=-1, vl_size=-1, tt_size=-1, **kwargs):
+    def __init__(self, batch_size, num_workers, tr_path=None, vl_path=None, tt_path=None, n_gpus=-1, tr_size=-1, vl_size=-1, tt_size=-1, **kwargs):
         super().__init__(batch_size, num_workers)
         
         self.n_gpus = n_gpus

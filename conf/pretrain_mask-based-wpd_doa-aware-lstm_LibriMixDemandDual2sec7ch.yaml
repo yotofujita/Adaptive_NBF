@@ -6,7 +6,7 @@ name: mask-based-wpd_doa-aware-lstm
 debug: false
 
 testonly: false
-# ckpt_path: /home/fujita/research/NeuralBF-IROS2022/experiments/LibriMixDemandDual2sec7ch/mask-based-wpd_doa-aware-lstm/2024-07-03-13-06-05/epoch=9-step=90000.ckpt
+# ckpt_path: /n/work1/fujita/research/WPD_adaptation/experiments/pretrain_mask-based-wpd_LibriMixDemandDual2sec7ch/mask-based-wpd_doa-aware-lstm/2024-07-26-21-21-53/epoch=16-step=153000.ckpt
 
 n_gpus: 1
 

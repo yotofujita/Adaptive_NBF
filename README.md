@@ -32,3 +32,10 @@ PYTHONPATH=$(pwd) gpujob -d 1 /n/work3/fujita/miniconda3/envs/nbf/bin/python tra
 
 PYTHONPATH=$(pwd) gpujob -d 1 /n/work3/fujita/miniconda3/envs/nbf/bin/python train.py --config-name=finetune_mask-based-wpd_doa-aware-lstm_iter-wpe-fastmnmf-doaest_LibriMixDemandTest name='n_spks\=4_rt60\=0.5_noise-snr\=30.0' id=35 data_module.total_s=240
 ```
+
+0 11 15 17 19 20 22 25 2 35 38 3 41 45 47 4 53 59 61 7 10 13 16 18 1 21 23 26 30 37 
+
+39 40 42 46 49 52 54 60 63
+
+### Eval fastmnmf
+PYTHONPATH=/n/work1/fujita/research/WPD_adaptation gpujob -d 5 /home/fujita/miniconda3/envs/nbf/bin/python eval.py --config-name=eval_iter-wpe-fastmnmf-oracle_LibriMixDemandTest name='noise-snr\=30.0' id=0

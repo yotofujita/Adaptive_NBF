@@ -1,3 +1,4 @@
+import os
 import json
 import random
 import pandas as pd
@@ -11,11 +12,12 @@ from src.modules.iter_wpe_fastmnmf_doaest import FastMNMFDOAEst
 
 
 class LightningDataModule(BaseDataModule):
-    def __init__(self, batch_size, num_workers, json_path, manifest_path, duration=30.0, n_srcs=5, total_s=60, test_duration=2.0, n_gpus=-1, size=-1, **kwargs):
+    def __init__(self, batch_size, num_workers, json_path, manifest_path, duration=30.0, n_srcs=5, total_s=60, threshold=5.0, test_duration=2.0, n_gpus=-1, size=-1, **kwargs):
         super().__init__(batch_size, num_workers)
         
         self.n_srcs = n_srcs
         self.total_s = total_s 
+        self.threshold = threshold
         self.test_duration = test_duration
         
         self.n_gpus = n_gpus
@@ -29,7 +31,7 @@ class LightningDataModule(BaseDataModule):
     def setup(self, stage=None):
         if stage == "fit":
             if self.n_gpus < 2:
-                self.train_dataset = TrainDataset(self.json_path, self.manifest_path, duration=self.duration, n_srcs=self.n_srcs, total_s=self.total_s, size=self.size)
+                self.train_dataset = TrainDataset(self.json_path, self.manifest_path, duration=self.duration, total_s=self.total_s, n_srcs=self.n_srcs, threshold=self.threshold, size=self.size)
                 self.valid_dataset = self.train_dataset
             else:
                 print("Not supporting multiple GPUs.")
@@ -45,7 +47,7 @@ class LightningDataModule(BaseDataModule):
 
 
 class TrainDataset(torch.utils.data.Dataset):
-    def __init__(self, json_path, manifest_path, duration=30.0, sr=16000, total_s=60, n_srcs=5, threshold=5.0, size=-1):
+    def __init__(self, json_path, manifest_path, duration=30.0, total_s=60, n_srcs=5, threshold=5.0, size=-1, sr=16000):
         assert total_s <= 240
         
         self.size = size
@@ -98,18 +100,15 @@ class TrainDataset(torch.utils.data.Dataset):
                 "mic_shape": [mic_shape for _ in range(mx.shape[0])]
             })))
         
-        B = len(self.df)
-        
         # merge with pretraining data
-        random.seed(0); random.shuffle(_manifest)
-        manifest = _manifest[:B]
-        for m in manifest:
-            self.df = pd.concat((self.df, pd.DataFrame({
-                "mix": [torchaudio.load(m["mix_path"])[0]],
-                "src": [torchaudio.load(m["source_path"])[0]],
-                "spk_doa": [torch.tensor(m["spk_doa"])],
-                "mic_shape": [torch.tensor(m["mic_shape"]).T]
-            })))
+        random.seed(int(os.path.basename(json_path).split(".")[0])); random.shuffle(_manifest)
+        manifest = _manifest[:len(self.df)]
+        self.df = pd.concat((self.df, pd.DataFrame({
+            "mix": [torchaudio.load(m["mix_path"])[0] for m in manifest],
+            "src": [torchaudio.load(m["source_path"])[0] for m in manifest],
+            "spk_doa": [torch.tensor(m["spk_doa"]) for m in manifest],
+            "mic_shape": [torch.tensor(m["mic_shape"]).T for m in manifest]
+        })))
 
     def __len__(self):
         return len(self.df) if self.size < 1 else self.size
@@ -131,8 +130,8 @@ class TestDataset(torch.utils.data.Dataset):
             data = json.load(f)
         
         mix, _ = torchaudio.load(data["mix_path"]); M, _ = mix.shape
-        speech, _ = torchaudio.load(data["source_path"])
-        spk_doa = torch.tensor(data["spk_doa"])
+        speech, _ = torchaudio.load(data["source_paths"][0])
+        spk_doa = torch.tensor(data["spk_doas"][0])
         mic_shape = torch.tensor(data["mic_shape"]).T
 
         mix = mix[:, int(240*sr):]
@@ -140,8 +139,12 @@ class TestDataset(torch.utils.data.Dataset):
         
         unit_n_samples = int(duration * sr)
         
-        mix = mix[:, :mix.shape[-1]-mix.shape[-1]%(unit_n_samples)]
-        speech = speech[:, :mix.shape[-1]]
+        if mix.shape[-1] >= speech.shape[-1]:
+            speech = speech[:, :speech.shape[-1]-speech.shape[-1]%(unit_n_samples)]
+            mix = mix[:, :speech.shape[-1]]
+        else:
+            mix = mix[:, :mix.shape[-1]-mix.shape[-1]%(unit_n_samples)]
+            speech = speech[:, :mix.shape[-1]]
 
         mix_blocked = mix.reshape(M, mix.shape[-1]//(unit_n_samples), unit_n_samples)
         mix_blocked = mix_blocked.permute(1, 0, 2)
@@ -155,7 +158,7 @@ class TestDataset(torch.utils.data.Dataset):
             "spk_doa": [spk_doa for _ in range(B)],
             "mic_shape": [mic_shape for _ in range(B)]
         })
-        self.asr_target = data["text_test"]
+        self.asr_target = data["texts_test"][0]
 
     def __len__(self):
         return len(self.df) if self.size < 1 else self.size

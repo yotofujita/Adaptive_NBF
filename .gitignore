@@ -1,11 +1,12 @@
 *.png
 *.flac
 *.wav
-*.sh
 *.pdf
+*.ckpt
 
 LibriMixDEMAND/
 experiments/
+experiments_old/
 src/pretrained_models/
 
 # Byte-compiled / optimized / DLL files

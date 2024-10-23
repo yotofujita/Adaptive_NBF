@@ -1,0 +1,47 @@
+output_dir: experiments/${project}/${name}_id=${id}
+
+project: eval_iter-wpe-fastmnmf-oracle_LibriMixDemandTest
+name: null
+id: null
+
+debug: False
+
+n_gpus: 1
+
+data_module:
+  _target_: src.dataset.doa_aware_asr_test_dataset.LightningDataModule
+
+  batch_size: 1
+  num_workers: 3
+  n_gpus: ${n_gpus}
+
+  json_path: /n/work1/fujita/json/libri_mix_demand_test_${name}/${id}.json
+  manifest_path: /n/work1/fujita/manifest/libri_mix_demand_dual_2sec_20h_7ch_train.manifest
+  test_duration: 30.0
+
+  size: -1
+
+lightning_module:
+  _target_: src.modules.iter_wpe_fastmnmf_oracle.FastMNMFOracle
+
+  eval_asr: True
+  asr_batch_size: 4
+
+  delay: 3
+  tap: 5
+
+trainer:
+  devices: ${n_gpus}
+  precision: 64
+  enable_progress_bar: True
+  benchmark: True
+  default_root_dir: ${output_dir}
+  use_distributed_sampler: False
+
+logger: 
+  _target_: pytorch_lightning.loggers.CSVLogger
+  save_dir: ${output_dir}
+
+hydra: 
+  run: 
+    dir: ${output_dir}

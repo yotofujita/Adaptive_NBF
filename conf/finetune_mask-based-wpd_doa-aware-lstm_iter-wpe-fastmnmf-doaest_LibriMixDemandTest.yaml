@@ -6,7 +6,7 @@ id: null
 
 debug: False
 testonly: False
-ckpt_path: /n/work3/fujita/research/NeuralBF-IROS2022/experiments/LibriMixDemandDual2sec7ch/mask-based-wpd_doa-aware-lstm/2024-07-11-18-39-41/epoch=18-step=171000.ckpt
+ckpt_path: /n/work1/fujita/research/WPD_adaptation/experiments/pretrain_mask-based-wpd_LibriMixDemandDual2sec7ch/mask-based-wpd_doa-aware-lstm/2024-10-18-01-38-49/epoch=16-step=153000.ckpt
 
 n_gpus: 1
 
@@ -20,6 +20,7 @@ data_module:
   json_path: /n/work1/fujita/json/libri_mix_demand_test_${name}/${id}.json
   manifest_path: /n/work1/fujita/manifest/libri_mix_demand_dual_2sec_20h_7ch_train.manifest
   duration: 30.0
+  test_duration: 2.0
 
   total_s: null
   n_srcs: 5
@@ -32,7 +33,7 @@ lightning_module:
 
   eval_asr: True
 
-  lr: 4e-5
+  lr: 1e-4
   skip_nan_grad: True
 
   delay: 3

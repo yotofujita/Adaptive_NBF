@@ -1,0 +1,79 @@
+output_dir: experiments/${project}/${name}_total_s=${data_module.total_s}_id=${id}
+
+project: finetune_mask-based-wpd_doa-aware-lstm_oracle_lr1e-3_LibriMixDemandTest
+name: null
+id: null
+
+debug: False
+testonly: False
+ckpt_path: /n/work1/fujita/research/WPD_adaptation/experiments/pretrain_mask-based-wpd_LibriMixDemandDual2sec7ch/mask-based-wpd_doa-aware-lstm/2024-10-18-01-38-49/epoch=16-step=153000.ckpt
+
+n_gpus: 1
+
+data_module:
+  _target_: src.dataset.doa_aware_adapt_oracle_asr_dataset.LightningDataModule
+
+  batch_size: 1
+  num_workers: 3
+  n_gpus: ${n_gpus}
+
+  json_path: /n/work1/fujita/json/libri_mix_demand_test_${name}/${id}.json
+  manifest_path: /n/work1/fujita/manifest/libri_mix_demand_dual_2sec_20h_7ch_train.manifest
+  test_duration: 2.0
+
+  total_s: null
+
+  size: -1
+
+lightning_module:
+  _target_: src.modules.mask_based_wpd.MaskBasedWPD
+
+  eval_asr: True
+
+  lr: 1e-3
+  skip_nan_grad: True
+
+  delay: 3
+  tap: 5
+
+  mask_estimator:
+    _target_: src.models.doa_aware_lstm.DOAAwareLSTM
+    n_mics: 7
+    n_freq: 513 
+    input_lstm: 1024
+    hidden_lstm: 512
+    n_layer: 3
+
+trainer:
+  devices: ${n_gpus}
+  max_epochs: 1
+  max_steps: -1
+  val_check_interval: 1.0
+  accelerator: auto
+  # strategy: ddp
+  accumulate_grad_batches: 4.0
+  gradient_clip_val: 1.0
+  precision: 64
+  log_every_n_steps: 30
+  enable_progress_bar: True
+  num_sanity_val_steps: 0
+  check_val_every_n_epoch: 1
+  sync_batchnorm: True
+  benchmark: True
+  default_root_dir: ${output_dir}
+  use_distributed_sampler: False
+
+callbacks:
+- _target_: pytorch_lightning.callbacks.ModelCheckpoint
+  dirpath: ${output_dir}
+  monitor: valid_loss
+  save_top_k: 1
+  save_last: False
+
+logger: 
+  _target_: pytorch_lightning.loggers.CSVLogger
+  save_dir: ${output_dir}
+
+hydra: 
+  run: 
+    dir: ${output_dir}
