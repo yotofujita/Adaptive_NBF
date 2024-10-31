@@ -24,7 +24,7 @@ data_module:
 
   total_s: null
   n_srcs: 5
-  threshold: 10.0
+  threshold: 5.0
 
   size: -1
 
