@@ -3,6 +3,7 @@
 *.wav
 *.pdf
 *.ckpt
+*.pk
 
 LibriMixDEMAND/
 experiments/

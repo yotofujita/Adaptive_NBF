@@ -8,18 +8,18 @@ debug: false
 testonly: false
 # ckpt_path: /n/work1/fujita/research/WPD_adaptation/experiments/pretrain_mask-based-wpd_LibriMixDemandDual2sec7ch/mask-based-wpd_doa-aware-lstm/2024-07-26-21-21-53/epoch=16-step=153000.ckpt
 
-n_gpus: 1
+n_gpus: 6
 
 data_module:
   _target_: src.dataset.doa_aware_dataset.LightningDataModule
 
-  batch_size: 1
-  num_workers: 3
+  batch_size: 24
+  num_workers: 7
   n_gpus: ${n_gpus}
 
-  tr_path: /n/work1/fujita/manifest/libri_mix_demand_dual_2sec_20h_7ch_train.manifest
-  vl_path: /n/work1/fujita/manifest/libri_mix_demand_dual_2sec_2h_7ch_dev.manifest
-  tt_path: /n/work1/fujita/manifest/libri_mix_demand_dual_2sec_2h_7ch_test.manifest
+  tr_path: /n/work3/fujita/manifest/libri_mix_demand_dual_2sec_100h_7ch_train.manifest
+  vl_path: /n/work3/fujita/manifest/libri_mix_demand_dual_2sec_10h_7ch_dev.manifest
+  tt_path: /n/work3/fujita/manifest/libri_mix_demand_dual_2sec_10h_7ch_test.manifest
 
   tr_size: -1
   vl_size: -1
@@ -48,7 +48,7 @@ trainer:
   max_steps: -1
   val_check_interval: 1.0
   accelerator: auto
-  # strategy: ddp
+  strategy: ddp
   accumulate_grad_batches: 4.0
   gradient_clip_val: 1.0
   precision: 64

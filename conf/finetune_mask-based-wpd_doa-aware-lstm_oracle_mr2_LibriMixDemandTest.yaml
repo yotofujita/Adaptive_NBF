@@ -1,6 +1,6 @@
 output_dir: experiments/${project}/${name}_total_s=${data_module.total_s}_id=${id}
 
-project: finetune_mask-based-wpd_doa-aware-lstm_iter-wpe-fastmnmf-doaest_lr1e-3_LibriMixDemandTest
+project: finetune_mask-based-wpd_doa-aware-lstm_oracle_mr2_LibriMixDemandTest
 name: null
 id: null
 
@@ -11,7 +11,7 @@ ckpt_path: /n/work1/fujita/research/WPD_adaptation/experiments/pretrain_mask-bas
 n_gpus: 1
 
 data_module:
-  _target_: src.dataset.doa_aware_adapt_iter_wpe_fastmnmf_asr_doaest_dataset.LightningDataModule
+  _target_: src.dataset.doa_aware_adapt_oracle_asr_dataset.LightningDataModule
 
   batch_size: 1
   num_workers: 3
@@ -19,12 +19,10 @@ data_module:
 
   json_path: /n/work1/fujita/json/libri_mix_demand_test_${name}/${id}.json
   manifest_path: /n/work1/fujita/manifest/libri_mix_demand_dual_2sec_20h_7ch_train.manifest
-  duration: 30.0
   test_duration: 2.0
+  mixing_ratio: 2.0
 
   total_s: null
-  n_srcs: 5
-  threshold: 5.0
 
   size: -1
 
@@ -33,7 +31,7 @@ lightning_module:
 
   eval_asr: True
 
-  lr: 1e-3
+  lr: 1e-4
   skip_nan_grad: True
 
   delay: 3

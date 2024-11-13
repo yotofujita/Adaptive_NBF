@@ -63,8 +63,8 @@ def SDR(estimate, reference):
     reference_pow = reference_pow.mean(axis=1)
     error_pow = error_pow.mean(axis=1)
 
-    sisdr = 10 * torch.log10(reference_pow) - 10 * torch.log10(error_pow)
-    return sisdr
+    sdr = 10 * torch.log10(reference_pow) - 10 * torch.log10(error_pow)
+    return sdr
 
 
 def WPD(mix, mask1, mask2, delay=3, tap=5, ref_channel=0, eps=1e-4, return_filter=False):

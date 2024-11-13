@@ -35,7 +35,7 @@ def main(cfg):
         )
     else:
         logger = instantiate(cfg.logger)
-        callbacks = [instantiate(cb) for cb in cfg.callbacks]
+        callbacks = [instantiate(cb) for cb in cfg.callbacks] if hasattr(cfg, "callbacks") else None
         trainer = pl.Trainer(
             logger=logger, 
             callbacks=callbacks, 

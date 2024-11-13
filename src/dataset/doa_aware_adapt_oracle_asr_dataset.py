@@ -13,11 +13,12 @@ from src.modules.iter_wpe_fastmnmf_doaest import FastMNMFDOAEst
 
 
 class LightningDataModule(BaseDataModule):
-    def __init__(self, batch_size, num_workers, json_path, manifest_path, total_s=60, test_duration=2.0, n_gpus=-1, size=-1, **kwargs):
+    def __init__(self, batch_size, num_workers, json_path, manifest_path, total_s=60, test_duration=2.0, mixing_ratio=1.0, n_gpus=-1, size=-1, **kwargs):
         super().__init__(batch_size, num_workers)
         
         self.total_s = total_s 
         self.test_duration = test_duration
+        self.mixing_ratio = mixing_ratio
         
         self.n_gpus = n_gpus
         
@@ -29,7 +30,7 @@ class LightningDataModule(BaseDataModule):
     def setup(self, stage=None):
         if stage == "fit":
             if self.n_gpus < 2:
-                self.train_dataset = TrainDataset(self.json_path, self.manifest_path, total_s=self.total_s, size=self.size)
+                self.train_dataset = TrainDataset(self.json_path, self.manifest_path, mixing_ratio=self.mixing_ratio, total_s=self.total_s, size=self.size)
                 self.valid_dataset = self.train_dataset
             else:
                 print("Not supporting multiple GPUs.")
@@ -45,7 +46,7 @@ class LightningDataModule(BaseDataModule):
 
 
 class TrainDataset(torch.utils.data.Dataset):
-    def __init__(self, json_path, manifest_path, sr=16000, total_s=60, size=-1):
+    def __init__(self, json_path, manifest_path, sr=16000, mixing_ratio=1.0, total_s=60, size=-1):
         assert total_s <= 240
         
         self.size = size
@@ -89,7 +90,7 @@ class TrainDataset(torch.utils.data.Dataset):
         
         # merge with pretraining data
         random.seed(int(os.path.basename(json_path).split(".")[0])); random.shuffle(_manifest)
-        manifest = _manifest[:len(self.df)]
+        manifest = _manifest[:int(len(self.df)*mixing_ratio)]
         self.df = pd.concat((self.df, pd.DataFrame({
             "mix": [torchaudio.load(m["mix_path"])[0] for m in manifest],
             "src": [torchaudio.load(m["source_path"])[0] for m in manifest],

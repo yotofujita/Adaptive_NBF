@@ -1,7 +1,6 @@
 import os
 import logging
 
-import numpy as np
 
 import torch
 import pytorch_lightning as pl
@@ -17,6 +16,8 @@ from torchmetrics.audio.srmr import SpeechReverberationModulationEnergyRatio
 
 from speechbrain.inference.ASR import EncoderDecoderASR
 from torchmetrics.text import WordErrorRate
+
+from utils.sp_utils import SDR
 
 
 class TextLogger(pl.loggers.Logger):
@@ -145,7 +146,14 @@ class BaseModule(pl.LightningModule):
         _, src, *_ = batch
         est, *_ = self.step(batch)
         
-        loss = - self.sdr(est, src[:, 0])
+        try:
+            loss = - self.sdr(est, src[:, 0])
+        except:
+            print("Faced singular matrix.")
+            import pickle as pk
+            with open(f'singular_data_{batch_idx}.pk', 'wb') as f:
+                pk.dump((batch, est), f)
+            loss = - SDR(est, src[:, 0]).mean()
 
         self.log("train_loss", loss, sync_dist=True)
         return loss
@@ -153,7 +161,7 @@ class BaseModule(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         _, src, *_ = batch
         est, *_ = self.step(batch)
-        
+    
         self.metrics["loss"].append(- self.sdr(est, src[:, 0]))
         self.metrics["SNR"].append(self.snr(est, src[:, 0]))
         self.metrics["SDR"].append(self.sdr(est, src[:, 0]))
