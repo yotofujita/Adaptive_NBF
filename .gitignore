@@ -1,12 +1,14 @@
 *.png
 *.flac
 *.wav
-*.sh
 *.pdf
+*.pk
+*.ckpt
 
 LibriMixDEMAND/
 experiments/
 src/pretrained_models/
+json*/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
