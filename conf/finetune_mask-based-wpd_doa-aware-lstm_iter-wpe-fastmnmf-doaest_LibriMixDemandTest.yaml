@@ -16,13 +16,13 @@ data_module:
   num_workers: 3
   n_gpus: ${n_gpus}
 
-  json_path: /n/work3/fujita/json/libri_mix_demand_test_${name}/${id}.json
-  manifest_path: /n/work3/fujita/manifest/libri_mix_demand_dual_2sec_20h_7ch_train.manifest
+  json_path: /n/work3/fujita/json_APSIPA/libri_mix_demand_test_${name}/${id}.json
+  manifest_path: /n/work3/fujita/manifest/libri_mix_demand_dual_2sec_100h_7ch_train.manifest
   duration: 30.0
 
   total_s: null
   n_srcs: 5
-  threshold: 10.0
+  threshold: 5.0
 
   size: -1
 

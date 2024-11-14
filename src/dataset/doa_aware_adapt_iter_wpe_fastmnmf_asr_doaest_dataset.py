@@ -131,8 +131,8 @@ class TestDataset(torch.utils.data.Dataset):
             data = json.load(f)
         
         mix, _ = torchaudio.load(data["mix_path"]); M, _ = mix.shape
-        speech, _ = torchaudio.load(data["source_path"])
-        spk_doa = torch.tensor(data["spk_doa"])
+        speech, _ = torchaudio.load(data["source_paths"][0])
+        spk_doa = torch.tensor(data["spk_doas"][0])
         mic_shape = torch.tensor(data["mic_shape"]).T
 
         mix = mix[:, int(240*sr):]
@@ -155,7 +155,7 @@ class TestDataset(torch.utils.data.Dataset):
             "spk_doa": [spk_doa for _ in range(B)],
             "mic_shape": [mic_shape for _ in range(B)]
         })
-        self.asr_target = data["text_test"]
+        self.asr_target = data["texts_test"]    
 
     def __len__(self):
         return len(self.df) if self.size < 1 else self.size
