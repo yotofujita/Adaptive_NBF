@@ -88,7 +88,7 @@ def plot_row(ax, df, y1, y2, var="n_spks", domain=[2, 3, 4], put_xlabel=True, pu
 
 
 name = "finetune_mask-based-wpd_doa-aware-lstm_iter-wpe-fastmnmf-doaest"
-wpd_dir = f"/n/work3/fujita/research/NeuralBF-IROS2022/experiments/{name}_LibriMixDemandTest/"
+wpd_dir = f"/n/work3/fujita/research/Adaptive_NBF/experiments/{name}_LibriMixDemandTest/"
 
 dirs_none = [p for p in Path(wpd_dir).glob("**/metrics.csv") if re.search("None", str(p))]
 dirs_finetune = [p for p in Path(wpd_dir).glob("**/metrics.csv") if not re.search("None", str(p))]
@@ -99,11 +99,11 @@ for path in dirs_none:
     csv = pd.read_csv(path)
     try:
         df = pd.concat((df, pd.DataFrame({
-            "n_spks": [int(str(path).split("n_spks=")[1].split("_")[0])],
-            # "room_size": [str(path).split("room_size=")[1].split("_")[0]],
-            "rt60": [float(str(path).split("rt60=")[1].split("_")[0])],
-            "SNR": [float(str(path).split("noise-snr=")[1].split("_")[0])],
-            # "src_distance": [float(str(path).split("src-distance=")[1].split("_")[0])],
+            "n_spks": [int(str(path).split("n-spks_")[1].split("_")[0])],
+            # "room_size": [str(path).split("room_size_")[1].split("_")[0]],
+            "rt60": [float(str(path).split("rt60_")[1].split("_")[0])],
+            "SNR": [float(str(path).split("noise-snr_")[1].split("_")[0])],
+            # "src_distance": [float(str(path).split("src-distance_")[1].split("_")[0])],
             "total_s": [0],
             "id": [int(str(path).split("id=")[1].split("/")[0])],
             "WER": [csv.iloc[0]["test_WER"].item()],
@@ -120,11 +120,11 @@ for path in dirs_finetune:
     csv = pd.read_csv(path)
     try:
         df = pd.concat((df, pd.DataFrame({
-            "n_spks": [int(str(path).split("n_spks=")[1].split("_")[0])],
-            # "room_size": [str(path).split("room_size=")[1].split("_")[0]],
-            "rt60": [float(str(path).split("rt60=")[1].split("_")[0])],
-            "SNR": [float(str(path).split("noise-snr=")[1].split("_")[0])],
-            # "src_distance": [float(str(path).split("src-distance=")[1].split("_")[0])],
+            "n_spks": [int(str(path).split("n-spks_")[1].split("_")[0])],
+            # "room_size": [str(path).split("room_size_")[1].split("_")[0]],
+            "rt60": [float(str(path).split("rt60_")[1].split("_")[0])],
+            "SNR": [float(str(path).split("noise-snr_")[1].split("_")[0])],
+            # "src_distance": [float(str(path).split("src-distance_")[1].split("_")[0])],
             "total_s": [int(str(path).split("total_s=")[1].split("_")[0])],
             "id": [int(str(path).split("id=")[1].split("/")[0])],
             "WER": [csv[csv.epoch==1]["test_WER"].item()],
